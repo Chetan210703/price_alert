@@ -1,0 +1,215 @@
+🧱 PHASE 1 – Setup (Day 1)
+
+Goal: Prepare your environment + create base project.
+
+✅ 1. Install tools
+
+Node.js
+
+VS Code
+
+Playwright (npm init playwright@latest)
+
+✅ 2. Create a new backend folder
+price-alert-backend/
+
+✅ 3. Initialize Node project
+npm init -y
+
+✅ 4. Install required packages
+npm install express playwright node-cron socket.io redis axios
+
+✔ When this is done, tell me: “Phase 1 done.”
+---------------------------------🕸 PHASE 2 – Build Your FIRST Scraper (Day 2)
+
+Goal: Scrape price from one website (choose Vijay Sales or BigBasket — easy).
+
+You will build:
+scrapers/
+   vijaysales.js
+
+
+Inside it (concept, not code):
+
+Launch Playwright browser
+
+Go to product URL
+
+Wait for price element
+
+Extract inner text
+
+Convert to number
+
+Return price + name + stock
+
+Selection signs:
+
+Right-click price → Inspect
+
+Copy selector
+
+Use in Playwright
+
+Your task:
+
+Build 1 working scraper file.
+Run it manually like:
+
+node vijaysales.js
+
+
+It should print:
+
+Price: 24999
+Stock: In stock
+
+✔ When this is done, tell me: “Phase 2 done.”
+-------------------------------------------🔁 PHASE 3 – Make It Automatic (Day 3)
+
+Goal: Check price automatically every 30 seconds.
+
+You will create:
+worker.js
+
+
+Inside worker logic:
+
+Every 30 seconds:
+    - call scraper
+    - print price
+
+
+Use node-cron or a simple setInterval.
+
+Task:
+
+Make the terminal print price every 30 seconds automatically.
+
+✔ When this works:
+
+Tell me: "Phase 3 done".
+
+---------------------------------------------------🧠 PHASE 4 – Add Change Detection (Day 4)
+
+Goal: Detect when price drops.
+
+You will use Redis free plan (Upstash)
+
+Steps:
+
+Create free Redis DB
+
+Install redis package
+
+Save last price:
+
+redis.set("product:1", price)
+
+
+Compare new price with old price
+
+Print “Price Dropped!” if lower
+
+Task:
+
+Make your terminal print alerts like:
+
+Current price: 23999  
+Old price: 24999  
+ALERT: Price dropped!
+
+✔ When this works
+
+Tell me: “Phase 4 done.”
+
+--------------------------------------------📡 PHASE 5 – Real-Time Alert System (Day 5/6)
+
+Goal: When price changes → push alert to frontend instantly.
+
+Steps:
+
+Install Socket.io
+
+Create server (express + socket.io)
+
+Connect frontend socket to backend
+
+When price changes:
+
+io.emit("priceAlert", data)
+
+
+Frontend receives alert pop-up.
+
+Task:
+
+Make your browser pop a notification instantly when price changes.
+
+✔ Tell me: “Phase 5 done.”
+------------------------------------------------🌐 PHASE 6 – Build Frontend UI (Day 7+)
+
+Using Next.js, make pages:
+
+Pages you will build:
+
+Add Product (enter URL)
+
+Product Dashboard (show status)
+
+Alerts History
+
+Backend:
+
+Create API route: /track
+
+Save product URL
+
+Trigger scraper worker automatically
+
+Task:
+
+Basic working UI with:
+
+Input for URL
+
+A card showing last price
+
+Live alerts via Socket.io
+
+----------------------------------------------------🧩 PHASE 7 – Add More Websites
+
+Once 1 website works:
+
+Add scrapers:
+
+scrapers/
+   vijaysales.js
+   bigbasket.js
+   sangeetha.js
+   amazon.js
+   flipkart.js
+
+
+Platform detector:
+
+if url.includes("vijaysales") → vijaysales.js
+if url.includes("bigbasket") → bigbasket.js
+...
+
+-------------------------------------------------------🚀 PHASE 8 – Deploy
+Frontend:
+
+Deploy Next.js to Vercel
+
+Backend:
+
+Deploy Express/Node to Railway (free)
+
+Database:
+
+Redis → Upstash free
+
+Done 🎉
+
+You now have your own fully custom, free-tested price alert system.
