@@ -8,7 +8,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootEnv = path.resolve(__dirname, "../.env");
 const backendEnv = path.resolve(__dirname, ".env");
 dotenv.config({ path: rootEnv });
-dotenv.config({ path: backendEnv, override: false }); // only fill missing vars
+dotenv.config({ path: backendEnv, override: false }); // only fill missing vars'
+
+
+
 export async function sendAlert(message) {
     const BOT_TOKEN = process.env.BOT_TOKEN;
     const CHAT_ID = process.env.CHAT_ID;
