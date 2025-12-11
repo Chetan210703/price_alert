@@ -1,5 +1,11 @@
 import axios from "axios";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
+// Load environment variables from project root (.env)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "../.env") });
 export async function sendAlert(message) {
     const BOT_TOKEN = process.env.BOT_TOKEN;
     const CHAT_ID = process.env.CHAT_ID;
@@ -17,7 +23,7 @@ export async function sendAlert(message) {
         // Support for both old and new parameter shapes
         const { url, site, oldPrice, newPrice } = message;
         text = [
-            "🔥 *Price Alert*",
+            " *Price Alert for Vijay Sales*",
             site ? `Site: ${site}` : null,
             oldPrice !== undefined ? `Old Price: ${oldPrice}` : null,
             newPrice !== undefined ? `New Price: ${newPrice}` : null,
