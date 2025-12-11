@@ -3,9 +3,12 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Load environment variables from project root (.env)
+// Load environment variables. Prefer project root .env, but also fall back to backend/.env.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../.env") });
+const rootEnv = path.resolve(__dirname, "../.env");
+const backendEnv = path.resolve(__dirname, ".env");
+dotenv.config({ path: rootEnv });
+dotenv.config({ path: backendEnv, override: false }); // only fill missing vars
 export async function sendAlert(message) {
     const BOT_TOKEN = process.env.BOT_TOKEN;
     const CHAT_ID = process.env.CHAT_ID;
