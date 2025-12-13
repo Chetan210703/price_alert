@@ -1,11 +1,36 @@
 {
   "products": [
     {
-      "url": "https://vijaysales.com/p/...",
+      "url": "https://vijaysales.com/p/iphone-16-pro-max-256gb-deep-purple",
       "title": "iPhone 15 (Black, 128 GB)",
       "site": "vijaysales",
       "history": [
-        { "price": "₹55,690", "timestamp": "2025-01-01T..." }
+        {
+          "price": "₹55,690",
+          "timestamp": "2025-01-01T..."
+        }
+      ]
+    },
+    {
+      "url": "https://www.flipkart.com/apple-iphone-16-pink-128-gb/p/itmc2e910b4d0b1c?pid=MOBH4DQFWJVDRSHM&lid=LSTMOBH4DQFWJVDRSHMQYAA7N&marketplace=FLIPKART&q=16&store=search.flipkart.com&srno=s_1_1&otracker=search&otracker1=search&fm=organic&iid=af836991-784b-4792-ad6e-2eba900e629e.MOBH4DQFWJVDRSHM.SEARCH&ppt=None&ppn=None&ssid=wrtqamkvkw0000001765626266664&qH=c74d97b01eae257e",
+      "site": "flipkart",
+      "title": "Apple iPhone 16 (Pink, 128 GB)",
+      "history": [
+        {
+          "price": "₹69,900",
+          "timestamp": "2025-12-13T11:57:44.569Z"
+        }
+      ]
+    },
+    {
+      "url": "https://www.flipkart.com/apple-iphone-16-teal-256-gb/p/itm2b7be11cfadef?pid=MOBH4DQFYKJHESFG&lid=LSTMOBH4DQFYKJHESFG4RZ0KX&marketplace=FLIPKART&q=16&store=search.flipkart.com&srno=s_1_8&otracker=search&otracker1=search&fm=organic&iid=af836991-784b-4792-ad6e-2eba900e629e.MOBH4DQFYKJHESFG.SEARCH&ppt=None&ppn=None&ssid=wrtqamkvkw0000001765626266664&qH=c74d97b01eae257e",
+      "site": "flipkart",
+      "title": "Apple iPhone 16 (Teal, 256 GB)",
+      "history": [
+        {
+          "price": "₹79,900",
+          "timestamp": "2025-12-13T12:02:21.231Z"
+        }
       ]
     }
   ]
