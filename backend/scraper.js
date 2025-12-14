@@ -30,6 +30,28 @@ async function gotoWithRetry(page, url, maxAttempts = 3) {
     }
 }
 
+
+// Helper function to validate if extracted text looks like a price
+function isValidPrice(text) {
+    if (!text || typeof text !== 'string') {
+        return false;
+    }
+    
+    const trimmed = text.trim();
+    if (trimmed.length === 0) {
+        return false;
+    }
+    
+    // Check if it contains currency symbols
+    const currencySymbols = /[₹$€£¥₹]/.test(trimmed);
+    
+    // Check if it contains digits
+    const hasDigits = /\d/.test(trimmed);
+    
+    // Must have either currency symbol or digits (or both)
+    return currencySymbols || hasDigits;
+}
+
 // Scrape Amazon
 async function scrapeAmazon(page, url) {
     try {
@@ -75,7 +97,13 @@ async function scrapeAmazon(page, url) {
                         price = '₹' + price.replace(/[^\d.]/g, '');
                     }
                     
-                    if (price) break;
+                    // Validate that extracted text actually looks like a price
+                    if (price && isValidPrice(price)) {
+                        break;
+                    } else {
+                        price = null; // Reset if validation fails
+                    }
+                
                 }
             } catch (e) {
                 continue;
@@ -104,7 +132,8 @@ async function scrapeFlipkart(page, url) {
             '._16Jk6d',
             '[class*="_30jeq3"]',
             '.dyC4hf ._30jeq3',
-            '._25b18c ._30jeq3'
+            '._25b18c ._30jeq3',
+            '.hZ3P6w.bnqy13'
         ];
         
         let price = null;
@@ -119,7 +148,12 @@ async function scrapeFlipkart(page, url) {
         for (const selector of selectors) {
             try {
                 price = await page.$eval(selector, el => el.innerText.trim()).catch(() => null);
-                if (price) break;
+                // Validate that extracted text actually looks like a price
+                if (price && isValidPrice(price)) {
+                    break;
+                } else {
+                    price = null; // Reset if validation fails
+                }
             } catch (e) {
                 continue;
             }
@@ -164,7 +198,11 @@ async function scrapeVijaySales(page, url) {
             for (const selector of selectors.slice(1)) {
                 try {
                     price = await page.$eval(selector, el => el.innerText.trim());
-                    if (price) break;
+                    if (price && isValidPrice(price)) {
+                        break;
+                    } else {
+                        price = null; // Reset if validation fails
+                    }
                 } catch {}
             }
         }
