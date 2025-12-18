@@ -64,8 +64,20 @@ export default function ProductDetails() {
   };
 
   const chartData = product ? formatChartData(product.history) : [];
-  const latestPrice = product?.history?.[product.history.length - 1]?.price || "N/A";
+  const latestEntry = product?.history?.[product.history.length - 1] || null;
+  const latestPrice = latestEntry?.price || "N/A";
   const firstPrice = product?.history?.[0]?.price || "N/A";
+
+  const latestCouponAvailable =
+    typeof latestEntry?.couponAvailable === "boolean"
+      ? latestEntry.couponAvailable
+      : false;
+  const latestCouponText =
+    latestCouponAvailable && latestEntry?.couponText
+      ? latestEntry.couponText
+      : latestCouponAvailable
+      ? "Coupon available"
+      : null;
 
   // Calculate price change
   const getPriceChange = () => {
@@ -326,6 +338,38 @@ export default function ProductDetails() {
                 {product.history?.length || 0}
               </p>
             </div>
+
+            {/* Coupon status card */}
+            <div style={{
+              background: latestCouponAvailable ? "#e8f5e9" : "#f8f9fa",
+              borderRadius: "16px",
+              padding: "24px"
+            }}>
+              <p style={{
+                margin: "0 0 8px 0",
+                fontSize: "0.9rem",
+                color: "#666"
+              }}>
+                Coupon Status
+              </p>
+              <p style={{
+                margin: 0,
+                fontSize: "1.1rem",
+                fontWeight: "600",
+                color: latestCouponAvailable ? "#2e7d32" : "#999"
+              }}>
+                {latestCouponAvailable ? "Coupon available" : "No coupon detected"}
+              </p>
+              {latestCouponText && (
+                <p style={{
+                  margin: "6px 0 0 0",
+                  fontSize: "0.9rem",
+                  color: "#555"
+                }}>
+                  {latestCouponText}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Price History Chart */}
@@ -458,6 +502,15 @@ export default function ProductDetails() {
                       }}>
                         Price
                       </th>
+                      <th style={{
+                        padding: "16px",
+                        textAlign: "left",
+                        color: "#666",
+                        fontWeight: "600",
+                        fontSize: "0.9rem"
+                      }}>
+                        Coupon
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -494,6 +547,17 @@ export default function ProductDetails() {
                             fontSize: "1rem"
                           }}>
                             {item.price}
+                          </td>
+                          <td style={{
+                            padding: "16px",
+                            color: "#333",
+                            fontSize: "0.9rem"
+                          }}>
+                            {typeof item.couponAvailable === "boolean"
+                              ? item.couponAvailable
+                                ? item.couponText || "Coupon available"
+                                : "No coupon"
+                              : "—"}
                           </td>
                         </tr>
                       );

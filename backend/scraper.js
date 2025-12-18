@@ -18,7 +18,8 @@ function detectSite(url) {
 async function gotoWithRetry(page, url, maxAttempts = 3) {
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-            await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
+            // Use a lighter waitUntil and higher timeout to avoid issues on heavy pages (like Amazon)
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
             return;
         } catch (err) {
             if (!err.message.includes("ERR_NETWORK_CHANGED") || attempt === maxAttempts) {
@@ -71,6 +72,8 @@ async function scrapeAmazon(page, url) {
         
         let price = null;
         let title = null;
+        let couponAvailable = false;
+        let couponText = null;
         
         // Try to get title
         try {
@@ -109,12 +112,51 @@ async function scrapeAmazon(page, url) {
                 continue;
             }
         }
+
+        // Try to detect coupon information (e.g. "Apply ₹299 coupon")
+        try {
+            const couponSelectorCandidates = [
+                // Common coupon label span (like the HTML you shared)
+                'span.couponLabelText',
+                // Generic id pattern Amazon uses for coupon text
+                '[id^="couponText"].couponLabelText',
+                '[id^="couponText"]',
+                // Coupon blocks or badges near price / buy box
+                '.couponBadge',
+                '.coupon-message',
+                '.a-section .coupon-label',
+                // Fallback: any element whose text contains the word "coupon"
+                'span:has-text("coupon")',
+                'div:has-text("coupon")'
+            ];
+
+            for (const couponSelector of couponSelectorCandidates) {
+                const couponElement = await page.$(couponSelector);
+                if (couponElement) {
+                    couponText = await page.$eval(
+                        couponSelector,
+                        el => el.innerText.trim()
+                    ).catch(() => null);
+                    if (couponText && couponText.length > 0) {
+                        couponAvailable = true;
+                        break;
+                    }
+                }
+            }
+        } catch {
+            // If coupon scraping fails, just continue without coupon info
+        }
         
         if (!price) {
             throw new Error('Price not found on Amazon page');
         }
         
-        return { price: price.trim(), title: title || '' };
+        return {
+            price: price.trim(),
+            title: title || '',
+            couponAvailable,
+            couponText: couponText || null
+        };
     } catch (err) {
         throw new Error(`Amazon scraping failed: ${err.message}`);
     }
@@ -138,6 +180,8 @@ async function scrapeFlipkart(page, url) {
         
         let price = null;
         let title = null;
+        const couponAvailable = false;
+        const couponText = null;
         
         // Try to get title
         try {
@@ -163,7 +207,12 @@ async function scrapeFlipkart(page, url) {
             throw new Error('Price not found on Flipkart page');
         }
         
-        return { price: price.trim(), title: title || '' };
+        return {
+            price: price.trim(),
+            title: title || '',
+            couponAvailable,
+            couponText
+        };
     } catch (err) {
         throw new Error(`Flipkart scraping failed: ${err.message}`);
     }
@@ -183,6 +232,8 @@ async function scrapeVijaySales(page, url) {
         
         let price = null;
         let title = null;
+        const couponAvailable = false;
+        const couponText = null;
         
         // Try to get title
         try {
@@ -211,7 +262,12 @@ async function scrapeVijaySales(page, url) {
             throw new Error('Price not found on Vijay Sales page');
         }
         
-        return { price: price.trim(), title: title || '' };
+        return {
+            price: price.trim(),
+            title: title || '',
+            couponAvailable,
+            couponText
+        };
     } catch (err) {
         throw new Error(`Vijay Sales scraping failed: ${err.message}`);
     }
@@ -258,6 +314,13 @@ export async function scrapeProduct(productUrl, site = null) {
         if (result.title) {
             console.log(`Title: ${result.title}`);
         }
+        if (typeof result.couponAvailable === 'boolean') {
+            if (result.couponAvailable) {
+                console.log(`Coupon available: ${result.couponText || 'Yes'}`);
+            } else {
+                console.log('Coupon available: No');
+            }
+        }
         
         return result;
     } catch (err) {
@@ -290,36 +353,56 @@ export async function scrapeAllProducts() {
                 product.title = result.title;
             }
             
-            // Check previous price
+            // Check previous history entry (price + coupon info)
             const previousEntry = product.history[product.history.length - 1];
+
+            const previousPrice = previousEntry?.price;
+            const previousCouponAvailable =
+                typeof previousEntry?.couponAvailable === 'boolean'
+                    ? previousEntry.couponAvailable
+                    : null;
+            const previousCouponText = previousEntry?.couponText ?? null;
+
+            const priceChanged = !previousEntry || previousPrice !== result.price;
+            const couponStatusChanged =
+                typeof result.couponAvailable === 'boolean'
+                    ? previousCouponAvailable !== result.couponAvailable ||
+                      (result.couponAvailable &&
+                        previousCouponText !== (result.couponText || null))
+                    : false;
             
-            // Save only if different
-            if (!previousEntry || previousEntry.price !== result.price) {
+            // Save new history entry if price OR coupon info changed
+            if (priceChanged || couponStatusChanged) {
                 product.history.push({
                     price: result.price,
+                    couponAvailable:
+                        typeof result.couponAvailable === 'boolean'
+                            ? result.couponAvailable
+                            : null,
+                    couponText: result.couponText || null,
                     timestamp: new Date().toISOString()
                 });
                 
                 saveDB(db);
-                console.log(`✓ Updated price for: ${product.title || product.url}`);
+                console.log(`✓ Updated entry for: ${product.title || product.url}`);
                 
-                // Send alert if price changed
+                // Send alert if something changed (price or coupon)
                 if (previousEntry) {
                     try {
-                        await sendAlert(`
-Price Update!
-Site: ${product.site || 'Unknown'}
-Product: ${product.title || product.url}
-Old Price: ${previousEntry.price}
-New Price: ${result.price}
-URL: ${product.url}
-                        `);
+                        await sendAlert({
+                            url: product.url,
+                            site: product.site || 'unknown',
+                            oldPrice: previousPrice,
+                            newPrice: result.price,
+                            couponAvailable: result.couponAvailable,
+                            couponText: result.couponText,
+                        });
                     } catch (err) {
                         console.error("Alert failed:", err.message);
                     }
                 }
             } else {
-                console.log(`- No price change for: ${product.title || product.url}`);
+                console.log(`- No price or coupon change for: ${product.title || product.url}`);
             }
             
             // Wait a bit between requests to avoid rate limiting

@@ -55,6 +55,10 @@ app.post("/api/add-product", (req, res) => {
             if (result.title) product.title = result.title;
             product.history.push({
                 price: result.price,
+                couponAvailable: typeof result.couponAvailable === 'boolean'
+                    ? result.couponAvailable
+                    : null,
+                couponText: result.couponText || null,
                 timestamp: new Date().toISOString()
             });
             saveDB(db);

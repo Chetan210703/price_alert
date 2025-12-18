@@ -59,6 +59,19 @@ export default function Home() {
     return history[history.length - 1]?.price || "N/A";
   };
 
+  const getLatestCouponInfo = (history) => {
+    if (!history || history.length === 0) return { hasCoupon: false, text: null };
+    const latest = history[history.length - 1];
+
+    const hasCoupon =
+      typeof latest.couponAvailable === "boolean" ? latest.couponAvailable : false;
+
+    return {
+      hasCoupon,
+      text: hasCoupon ? latest.couponText || "Coupon available" : null,
+    };
+  };
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -234,7 +247,9 @@ export default function Home() {
             gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
             gap: "24px"
           }}>
-            {products.map(p => (
+            {products.map(p => {
+              const latestCoupon = getLatestCouponInfo(p.history);
+              return (
               <div
                 key={p.url}
                 style={{
@@ -289,7 +304,7 @@ export default function Home() {
                 </div>
 
                 <div style={{
-                  marginBottom: "20px"
+                  marginBottom: "12px"
                 }}>
                   <p style={{
                     color: "#999",
@@ -308,6 +323,25 @@ export default function Home() {
                     {getLatestPrice(p.history)}
                   </p>
                 </div>
+
+                {/* Coupon badge (if any) */}
+                {latestCoupon.hasCoupon && (
+                  <div style={{
+                    marginBottom: "20px",
+                    padding: "6px 10px",
+                    borderRadius: "999px",
+                    background: "rgba(76, 175, 80, 0.08)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    fontSize: "0.85rem",
+                    color: "#2e7d32",
+                    fontWeight: "500"
+                  }}>
+                    <span>🏷️ Coupon</span>
+                    <span style={{ opacity: 0.9 }}>{latestCoupon.text}</span>
+                  </div>
+                )}
 
                 <Link
                   to={`/product?url=${encodeURIComponent(p.url)}`}
@@ -333,7 +367,7 @@ export default function Home() {
                   View Details →
                 </Link>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>

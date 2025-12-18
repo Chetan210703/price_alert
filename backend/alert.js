@@ -27,12 +27,31 @@ export async function sendAlert(message) {
         text = message;
     } else if (typeof message === "object" && message !== null) {
         // Support for both old and new parameter shapes
-        const { url, site, oldPrice, newPrice } = message;
+        const {
+            url,
+            site,
+            oldPrice,
+            newPrice,
+            couponAvailable,
+            couponText
+        } = message;
+        const siteLabel = site
+            ? site.charAt(0).toUpperCase() + site.slice(1)
+            : "Product";
+
+        const couponLine =
+            typeof couponAvailable === "boolean"
+                ? couponAvailable
+                    ? `Coupon: Available${couponText ? ` - ${couponText}` : ""}`
+                    : "Coupon: Not available"
+                : null;
+
         text = [
-            " *Price Alert for Vijay Sales*",
+            `*Price Alert for ${siteLabel}*`,
             site ? `Site: ${site}` : null,
             oldPrice !== undefined ? `Old Price: ${oldPrice}` : null,
             newPrice !== undefined ? `New Price: ${newPrice}` : null,
+            couponLine,
             url ? `URL: ${url}` : null
         ].filter(Boolean).join("\n");
     } else {
