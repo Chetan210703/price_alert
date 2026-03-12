@@ -1,5 +1,5 @@
 import { chromium } from 'playwright';
-import { loadDB, saveDB } from './database.js';
+import { getAllProducts, getProductByUrl, updateProduct, addProductHistory } from './db/database.js';
 import { sendAlert } from './alert.js';
 
 // Helper function to detect site from URL
@@ -334,8 +334,7 @@ export async function scrapeProduct(productUrl, site = null) {
 
 // Scrape all products from database
 export async function scrapeAllProducts() {
-    const db = loadDB();
-    const products = db.products || [];
+    const products = await getAllProducts();
     
     if (products.length === 0) {
         console.log('No products to scrape');
@@ -348,13 +347,20 @@ export async function scrapeAllProducts() {
         try {
             const result = await scrapeProduct(product.url, product.site);
             
+            // Get fresh product data from DB
+            const currentProduct = await getProductByUrl(product.url);
+            if (!currentProduct) {
+                console.error(`Product not found: ${product.url}`);
+                continue;
+            }
+            
             // Update product title if we got one
-            if (result.title && !product.title) {
-                product.title = result.title;
+            if (result.title && !currentProduct.title) {
+                await updateProduct(product.url, { title: result.title });
             }
             
             // Check previous history entry (price + coupon info)
-            const previousEntry = product.history[product.history.length - 1];
+            const previousEntry = currentProduct.history?.[currentProduct.history.length - 1];
 
             const previousPrice = previousEntry?.price;
             const previousCouponAvailable =
@@ -373,7 +379,7 @@ export async function scrapeAllProducts() {
             
             // Save new history entry if price OR coupon info changed
             if (priceChanged || couponStatusChanged) {
-                product.history.push({
+                const historyEntry = {
                     price: result.price,
                     couponAvailable:
                         typeof result.couponAvailable === 'boolean'
@@ -381,10 +387,10 @@ export async function scrapeAllProducts() {
                             : null,
                     couponText: result.couponText || null,
                     timestamp: new Date().toISOString()
-                });
+                };
                 
-                saveDB(db);
-                console.log(`✓ Updated entry for: ${product.title || product.url}`);
+                await addProductHistory(product.url, historyEntry);
+                console.log(`✓ Updated entry for: ${currentProduct.title || product.url}`);
                 
                 // Send alert if something changed (price or coupon)
                 if (previousEntry) {
@@ -402,7 +408,7 @@ export async function scrapeAllProducts() {
                     }
                 }
             } else {
-                console.log(`- No price or coupon change for: ${product.title || product.url}`);
+                console.log(`- No price or coupon change for: ${currentProduct.title || product.url}`);
             }
             
             // Wait a bit between requests to avoid rate limiting
@@ -419,8 +425,8 @@ export async function scrapeAllProducts() {
 
 // Legacy function for backward compatibility
 export default async function scrapeVijayStore() {
-    const db = loadDB();
-    const vijayProducts = db.products.filter(p => 
+    const products = await getAllProducts();
+    const vijayProducts = products.filter(p => 
         p.site === 'vijaysales' || p.url.includes('vijaysales.com')
     );
     

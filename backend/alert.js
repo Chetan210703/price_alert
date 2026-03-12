@@ -1,23 +1,10 @@
-import axios from "axios";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-
-// Load environment variables. Prefer project root .env, but also fall back to backend/.env.
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const rootEnv = path.resolve(__dirname, "../.env");
-const backendEnv = path.resolve(__dirname, ".env");
-dotenv.config({ path: rootEnv });
-dotenv.config({ path: backendEnv, override: false }); // only fill missing vars'
-
-
+import { sendTelegramMessage, getActiveUsers } from "./telegramBot.js";
 
 export async function sendAlert(message) {
-    const BOT_TOKEN = process.env.BOT_TOKEN;
-    const CHAT_ID = process.env.CHAT_ID;
+    const activeUsers = getActiveUsers();
 
-    if (!BOT_TOKEN || !CHAT_ID) {
-        console.error("BOT_TOKEN or CHAT_ID environment variable not set.");
+    if (activeUsers.length === 0) {
+        console.log("No active users connected. Alert not sent.");
         return;
     }
 
@@ -58,16 +45,18 @@ export async function sendAlert(message) {
         text = String(message);
     }
 
-    const sendUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+    // Send to all active users
+    let successCount = 0;
+    for (const user of activeUsers) {
+        const success = await sendTelegramMessage(user.chatId, text, "Markdown");
+        if (success) {
+            successCount++;
+        }
+    }
 
-    try {
-        await axios.post(sendUrl, {
-            chat_id: CHAT_ID,
-            text,
-            parse_mode: "Markdown"
-        });
-        console.log("Telegram alert sent!");
-    } catch (err) {
-        console.error("Telegram error:", err?.response?.data || err.message || err);
+    if (successCount > 0) {
+        console.log(`Telegram alert sent to ${successCount} user(s)!`);
+    } else {
+        console.error("Failed to send Telegram alerts to any user");
     }
 }

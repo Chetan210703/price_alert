@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { getPriceAfterCoupon } from "../utils/priceUtils.js";
 
 export default function Home() {
   const [products, setProducts] = useState([]);
@@ -7,6 +8,8 @@ export default function Home() {
   const [error, setError] = useState(null);
   const [scraping, setScraping] = useState(false);
   const [scrapeMessage, setScrapeMessage] = useState(null);
+  const [botInfo, setBotInfo] = useState(null);
+  const [telegramLoading, setTelegramLoading] = useState(true);
 
   const fetchProducts = () => {
     fetch("http://localhost:3001/api/products")
@@ -30,7 +33,46 @@ export default function Home() {
 
   useEffect(() => {
     fetchProducts();
+    fetchBotInfo();
   }, []);
+
+  const fetchBotInfo = async () => {
+    try {
+      const response = await fetch("http://localhost:3001/api/telegram-bot-info");
+      const data = await response.json();
+      setBotInfo(data);
+    } catch (err) {
+      console.error("Error fetching bot info:", err);
+      setBotInfo({ connected: false });
+    } finally {
+      setTelegramLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (url, title) => {
+    if (!window.confirm(`Are you sure you want to remove "${title || url}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/product?url=${encodeURIComponent(url)}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Failed to delete product");
+        return;
+      }
+
+      // Refresh products list
+      fetchProducts();
+    } catch (err) {
+      console.error("Error deleting product:", err);
+      alert("Network error. Please try again.");
+    }
+  };
 
   const handleManualScrape = async () => {
     setScraping(true);
@@ -161,8 +203,95 @@ export default function Home() {
             >
               + Add New Product
             </Link>
+            {botInfo && botInfo.connected && (
+              <a
+                href={botInfo.botLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  background: "linear-gradient(135deg, #0088cc 0%, #0066aa 100%)",
+                  color: "#ffffff",
+                  padding: "12px 24px",
+                  borderRadius: "12px",
+                  textDecoration: "none",
+                  fontWeight: "600",
+                  fontSize: "1rem",
+                  boxShadow: "0 4px 15px rgba(0,0,0,0.2)",
+                  transition: "transform 0.2s, box-shadow 0.2s",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.3)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 4px 15px rgba(0,0,0,0.2)";
+                }}
+              >
+                📱 Connect Telegram
+              </a>
+            )}
           </div>
         </div>
+
+        {/* Telegram Connection Info */}
+        {!telegramLoading && botInfo && botInfo.connected && (
+          <div style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            borderRadius: "12px",
+            padding: "16px 20px",
+            marginBottom: "24px",
+            border: "2px solid #0088cc",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px"
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "1.5rem" }}>📱</span>
+              <div>
+                <p style={{
+                  margin: 0,
+                  color: "#333",
+                  fontWeight: "600",
+                  fontSize: "1rem"
+                }}>
+                  Get Price Alerts on Telegram
+                </p>
+                <p style={{
+                  margin: "4px 0 0 0",
+                  color: "#666",
+                  fontSize: "0.85rem"
+                }}>
+                  {botInfo.activeUsersCount > 0 
+                    ? `${botInfo.activeUsersCount} user(s) connected`
+                    : "Click the button above to connect and receive instant alerts"}
+                </p>
+              </div>
+            </div>
+            <a
+              href={botInfo.botLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                background: "linear-gradient(135deg, #0088cc 0%, #0066aa 100%)",
+                color: "#ffffff",
+                padding: "10px 20px",
+                borderRadius: "8px",
+                textDecoration: "none",
+                fontWeight: "600",
+                fontSize: "0.9rem",
+                whiteSpace: "nowrap"
+              }}
+            >
+              Open Bot →
+            </a>
+          </div>
+        )}
 
         {/* Scrape Message */}
         {scrapeMessage && (
@@ -322,6 +451,29 @@ export default function Home() {
                   }}>
                     {getLatestPrice(p.history)}
                   </p>
+                  {/* Show price after coupon if available */}
+                  {latestCoupon.hasCoupon && (() => {
+                    const latestEntry = p.history?.[p.history.length - 1];
+                    const afterCouponPrice = getPriceAfterCoupon(latestEntry);
+                    if (afterCouponPrice) {
+                      return (
+                        <div style={{
+                          marginTop: "8px"
+                        }}>
+                          <p style={{
+                            color: "#4caf50",
+                            fontSize: "1.15rem",
+                            fontWeight: "700",
+                            margin: 0,
+                            lineHeight: "1.4"
+                          }}>
+                            After coupon: <span style={{ fontSize: "1.2rem" }}>{afterCouponPrice}</span>
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 {/* Coupon badge (if any) */}
@@ -343,29 +495,66 @@ export default function Home() {
                   </div>
                 )}
 
-                <Link
-                  to={`/product?url=${encodeURIComponent(p.url)}`}
-                  style={{
-                    display: "block",
-                    textAlign: "center",
-                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                    color: "#ffffff",
-                    padding: "12px 20px",
-                    borderRadius: "10px",
-                    textDecoration: "none",
-                    fontWeight: "600",
-                    fontSize: "0.95rem",
-                    transition: "opacity 0.2s"
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.opacity = "0.9";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.opacity = "1";
-                  }}
-                >
-                  View Details →
-                </Link>
+                <div style={{
+                  display: "flex",
+                  gap: "10px",
+                  marginTop: "20px"
+                }}>
+                  <Link
+                    to={`/product?url=${encodeURIComponent(p.url)}`}
+                    style={{
+                      flex: 1,
+                      textAlign: "center",
+                      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                      color: "#ffffff",
+                      padding: "12px 20px",
+                      borderRadius: "10px",
+                      textDecoration: "none",
+                      fontWeight: "600",
+                      fontSize: "0.95rem",
+                      transition: "opacity 0.2s"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.opacity = "0.9";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = "1";
+                    }}
+                  >
+                    View Details →
+                  </Link>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteProduct(p.url, p.title);
+                    }}
+                    style={{
+                      background: "#f44336",
+                      color: "#ffffff",
+                      border: "none",
+                      padding: "12px 16px",
+                      borderRadius: "10px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "0.95rem",
+                      transition: "opacity 0.2s, transform 0.2s",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.opacity = "0.9";
+                      e.currentTarget.style.transform = "scale(1.05)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = "1";
+                      e.currentTarget.style.transform = "scale(1)";
+                    }}
+                    title="Delete product"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
             )})}
           </div>

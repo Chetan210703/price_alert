@@ -24,6 +24,48 @@ export default function AddProduct() {
     }
   };
 
+  const validateUrlFormat = (url) => {
+    if (!url || url.trim().length === 0) {
+      return { valid: true }; // Empty is OK, will be caught on submit
+    }
+
+    // Check URL format
+    try {
+      new URL(url);
+    } catch (e) {
+      return { valid: false, error: "Invalid URL format" };
+    }
+
+    // Check for unsupported sites
+    const unsupportedSites = [
+      'instagram.com', 'facebook.com', 'twitter.com', 'x.com',
+      'youtube.com', 'linkedin.com', 'pinterest.com', 'tiktok.com'
+    ];
+
+    const hostname = new URL(url).hostname.toLowerCase();
+    for (const unsupported of unsupportedSites) {
+      if (hostname.includes(unsupported)) {
+        return {
+          valid: false,
+          error: `Unsupported site. Please use Amazon, Flipkart, or Vijay Sales product URLs.`
+        };
+      }
+    }
+
+    // Check for supported sites
+    const supportedSites = ['amazon.in', 'amazon.com', 'flipkart.com', 'vijaysales.com'];
+    const isSupported = supportedSites.some(site => hostname.includes(site));
+    
+    if (!isSupported && url.length > 10) {
+      return {
+        valid: false,
+        error: "Unsupported website. Currently supported: Amazon, Flipkart, and Vijay Sales."
+      };
+    }
+
+    return { valid: true };
+  };
+
   const handleUrlChange = (e) => {
     const newUrl = e.target.value;
     setUrl(newUrl);
@@ -36,8 +78,14 @@ export default function AddProduct() {
       }
     }
     
-    // Clear errors when user types
-    if (error) setError("");
+    // Validate URL in real-time (but don't show error until blur or submit)
+    const validation = validateUrlFormat(newUrl);
+    if (!validation.valid && newUrl.length > 10) {
+      // Only show error if URL is substantial
+      setError(validation.error);
+    } else if (validation.valid) {
+      setError("");
+    }
   };
 
   const handleSubmit = async (e) => {

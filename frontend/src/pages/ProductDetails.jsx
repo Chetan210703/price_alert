@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import { useSearchParams, Link, useNavigate } from "react-router-dom";
+import { getPriceAfterCoupon } from "../utils/priceUtils.js";
 import {
   LineChart,
   Line,
@@ -13,11 +14,39 @@ import {
 
 export default function ProductDetails() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const url = searchParams.get("url");
+
+  const handleDeleteProduct = async () => {
+    if (!product) return;
+
+    if (!window.confirm(`Are you sure you want to remove "${product.title || product.url}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/product?url=${encodeURIComponent(product.url)}`, {
+        method: "DELETE",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Failed to delete product");
+        return;
+      }
+
+      // Redirect to home after deletion
+      navigate("/");
+    } catch (err) {
+      console.error("Error deleting product:", err);
+      alert("Network error. Please try again.");
+    }
+  };
 
   useEffect(() => {
     if (!url) {
@@ -236,6 +265,34 @@ export default function ProductDetails() {
               >
                 View on Site →
               </a>
+              
+              <button
+                onClick={handleDeleteProduct}
+                style={{
+                  background: "#f44336",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  fontSize: "0.9rem",
+                  fontWeight: "500",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  transition: "opacity 0.2s, transform 0.2s"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = "0.9";
+                  e.currentTarget.style.transform = "scale(1.05)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "1";
+                  e.currentTarget.style.transform = "scale(1)";
+                }}
+              >
+                🗑️ Delete Product
+              </button>
             </div>
           </div>
 
@@ -266,6 +323,38 @@ export default function ProductDetails() {
               }}>
                 {latestPrice}
               </p>
+              {/* Show price after coupon if available */}
+              {latestCouponAvailable && (() => {
+                const afterCouponPrice = getPriceAfterCoupon(latestEntry);
+                if (afterCouponPrice) {
+                  return (
+                    <div style={{
+                      marginTop: "16px",
+                      paddingTop: "16px",
+                      borderTop: "1px solid rgba(255,255,255,0.25)"
+                    }}>
+                      <p style={{
+                        margin: "0 0 6px 0",
+                        fontSize: "0.85rem",
+                        opacity: 0.9,
+                        fontWeight: "500"
+                      }}>
+                        After Coupon
+                      </p>
+                      <p style={{
+                        margin: 0,
+                        fontSize: "1.8rem",
+                        fontWeight: "700",
+                        color: "#4caf50",
+                        textShadow: "0 1px 2px rgba(0,0,0,0.1)"
+                      }}>
+                        {afterCouponPrice}
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             <div style={{
