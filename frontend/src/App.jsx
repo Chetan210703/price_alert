@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import PriceCard from "./components/PriceCard";
+import { API_BASE } from "./config.js";
 
 export default function App() {
   const [products, setProducts] = useState([]);
 
   useEffect(() => {
-    fetch("http://localhost:3001/api/products")
+    fetch(`${API_BASE}/api/products`)
       .then(res => res.json())
       .then(data => setProducts(data));
   }, []);

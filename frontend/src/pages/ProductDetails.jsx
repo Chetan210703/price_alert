@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { getPriceAfterCoupon } from "../utils/priceUtils.js";
 import PriceChat from "../components/PriceChat.jsx";
+import { API_BASE } from "../config.js";
 import {
   LineChart,
   Line,
@@ -30,7 +31,7 @@ export default function ProductDetails() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/product?url=${encodeURIComponent(product.url)}`, {
+      const response = await fetch(`${API_BASE}/api/product?url=${encodeURIComponent(product.url)}`, {
         method: "DELETE",
       });
 
@@ -57,7 +58,7 @@ export default function ProductDetails() {
     }
 
     // Fetch all products and find the one matching the URL
-    fetch("http://localhost:3001/api/products")
+    fetch(`${API_BASE}/api/products`)
       .then(res => res.json())
       .then(data => {
         const foundProduct = data.find(p => p.url === url);

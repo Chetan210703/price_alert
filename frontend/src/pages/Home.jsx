@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getPriceAfterCoupon } from "../utils/priceUtils.js";
+import { API_BASE } from "../config.js";
 
 export default function Home() {
   const [products, setProducts] = useState([]);
@@ -12,7 +13,7 @@ export default function Home() {
   const [telegramLoading, setTelegramLoading] = useState(true);
 
   const fetchProducts = () => {
-    fetch("http://localhost:3001/api/products")
+    fetch(`${API_BASE}/api/products`)
       .then(res => {
         if (!res.ok) {
           throw new Error(`Backend returned ${res.status}`);
@@ -26,7 +27,7 @@ export default function Home() {
       })
       .catch(err => {
         console.error("Error fetching products:", err);
-        setError("Cannot connect to backend. Make sure the backend server is running on port 3001.");
+        setError("Cannot connect to the API. Check that the backend is running and VITE_API_BASE is set correctly.");
         setLoading(false);
       });
   };
@@ -38,7 +39,7 @@ export default function Home() {
 
   const fetchBotInfo = async () => {
     try {
-      const response = await fetch("http://localhost:3001/api/telegram-bot-info");
+      const response = await fetch(`${API_BASE}/api/telegram-bot-info`);
       const data = await response.json();
       setBotInfo(data);
     } catch (err) {
@@ -55,7 +56,7 @@ export default function Home() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/product?url=${encodeURIComponent(url)}`, {
+      const response = await fetch(`${API_BASE}/api/product?url=${encodeURIComponent(url)}`, {
         method: "DELETE",
       });
 
@@ -78,7 +79,7 @@ export default function Home() {
     setScraping(true);
     setScrapeMessage(null);
     try {
-      const response = await fetch("http://localhost:3001/api/scrape", {
+      const response = await fetch(`${API_BASE}/api/scrape`, {
         method: "POST",
       });
       const data = await response.json();

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { API_BASE } from "../config.js";
 
 export default function AddProduct() {
   const [url, setUrl] = useState("");
@@ -109,7 +110,7 @@ export default function AddProduct() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:3001/api/add-product", {
+      const response = await fetch(`${API_BASE}/api/add-product`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

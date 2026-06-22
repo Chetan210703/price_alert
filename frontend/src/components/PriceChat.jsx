@@ -1,6 +1,5 @@
 import { useState } from "react";
-
-const API_BASE = "http://localhost:3001";
+import { API_BASE } from "../config.js";
 
 const SUGGESTIONS = [
   "What's the price trend?",
