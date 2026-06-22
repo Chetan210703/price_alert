@@ -23,6 +23,7 @@ export async function connectDB() {
         }
 
         client = new MongoClient(MONGODB_URI);
+        
         await client.connect();
         db = client.db(DB_NAME);
         

@@ -144,7 +144,11 @@ export async function getBotInfo() {
         const response = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
         return response.data.result;
     } catch (err) {
-        console.error("Failed to get bot info:", err.message);
+        if (err.code === "ECONNREFUSED" || err.code === "ENOTFOUND") {
+            console.warn("Telegram API unreachable (check network/VPN/firewall):", err.message);
+        } else {
+            console.error("Failed to get bot info:", err.message);
+        }
         return null;
     }
 }

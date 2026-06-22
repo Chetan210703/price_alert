@@ -1,7 +1,9 @@
-import { sendTelegramMessage, getActiveUsers } from "./telegramBot.js";
+// ✅ New setup inside alert.js
+import { sendTelegramMessage } from "./telegramBot.js";
+import { getActiveUsers } from "./db/database.js";     
 
 export async function sendAlert(message) {
-    const activeUsers = getActiveUsers();
+    const activeUsers =await getActiveUsers();
 
     if (activeUsers.length === 0) {
         console.log("No active users connected. Alert not sent.");

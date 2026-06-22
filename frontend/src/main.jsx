@@ -13,9 +13,9 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/product" element={<ProductDetails />} />
         <Route path="/add" element={<AddProduct />} />
-      </Routes>
+      </Routes> 
     </BrowserRouter>
-  );
+  ); 
 }
 
 createRoot(document.getElementById('root')).render(

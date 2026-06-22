@@ -10,7 +10,7 @@ function detectSite(url) {
         return 'flipkart';
     } else if (url.includes('vijaysales.com')) {
         return 'vijaysales';
-    }
+    } 
     return null;
 }
 
@@ -166,43 +166,89 @@ async function scrapeAmazon(page, url) {
 async function scrapeFlipkart(page, url) {
     try {
         await gotoWithRetry(page, url);
-        
-        // Flipkart price selectors
-        const selectors = [
-            '._30jeq3._16Jk6d',
-            '._30jeq3',
-            '._16Jk6d',
-            '[class*="_30jeq3"]',
-            '.dyC4hf ._30jeq3',
-            '._25b18c ._30jeq3',
-            '.hZ3P6w.bnqy13'
-        ];
-        
+        await page.waitForTimeout(2000);
+
         let price = null;
         let title = null;
         const couponAvailable = false;
         const couponText = null;
-        
-        // Try to get title
+
+        // JSON-LD is the most reliable source — Flipkart frequently rotates CSS classes
         try {
-            title = await page.$eval('h1[class*="B_NuCI"], .B_NuCI, h1 span', el => el.innerText.trim()).catch(() => null);
-        } catch {}
-        
-        // Try each selector
-        for (const selector of selectors) {
-            try {
-                price = await page.$eval(selector, el => el.innerText.trim()).catch(() => null);
-                // Validate that extracted text actually looks like a price
-                if (price && isValidPrice(price)) {
-                    break;
-                } else {
-                    price = null; // Reset if validation fails
+            const ldData = await page.evaluate(() => {
+                const scripts = [...document.querySelectorAll('script[type="application/ld+json"]')];
+                for (const script of scripts) {
+                    try {
+                        const parsed = JSON.parse(script.textContent);
+                        const items = Array.isArray(parsed) ? parsed : [parsed];
+                        for (const item of items) {
+                            if (item['@type'] !== 'Product') continue;
+                            const offer = item.offers;
+                            const offerObj = Array.isArray(offer) ? offer[0] : offer;
+                            const offerPrice = offerObj?.price;
+                            return {
+                                title: item.name || null,
+                                price: offerPrice != null ? Number(offerPrice) : null,
+                            };
+                        }
+                    } catch {}
                 }
-            } catch (e) {
-                continue;
+                return null;
+            });
+
+            if (ldData?.title) {
+                title = ldData.title;
+            }
+            if (ldData?.price != null && !Number.isNaN(ldData.price)) {
+                price = `₹${ldData.price.toLocaleString('en-IN')}`;
+            }
+        } catch {}
+
+        // Legacy CSS selectors (older Flipkart layouts)
+        if (!price) {
+            const selectors = [
+                '._30jeq3._16Jk6d',
+                '._30jeq3',
+                '._16Jk6d',
+                '[class*="_30jeq3"]',
+                '.dyC4hf ._30jeq3',
+                '._25b18c ._30jeq3',
+                '.hZ3P6w.bnqy13'
+            ];
+
+            for (const selector of selectors) {
+                try {
+                    price = await page.$eval(selector, el => el.innerText.trim()).catch(() => null);
+                    if (price && isValidPrice(price)) {
+                        break;
+                    }
+                    price = null;
+                } catch {
+                    continue;
+                }
             }
         }
-        
+
+        // Fallback: first leaf element whose text is a rupee amount
+        if (!price) {
+            price = await page.evaluate(() => {
+                const match = [...document.querySelectorAll('div, span')].find((el) => {
+                    const text = el.innerText?.trim();
+                    return text && /^₹[\d,]+$/.test(text) && el.children.length === 0;
+                });
+                return match?.innerText?.trim() || null;
+            }).catch(() => null);
+        }
+
+        if (!title) {
+            try {
+                title = await page.$eval(
+                    'h1[class*="B_NuCI"], .B_NuCI, h1 span, h1',
+                    el => el.innerText.trim()
+                ).catch(() => null);
+            } catch {}
+        }
+
         if (!price) {
             throw new Error('Price not found on Flipkart page');
         }

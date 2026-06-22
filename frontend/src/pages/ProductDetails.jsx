@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, Link, useNavigate } from "react-router-dom";
 import { getPriceAfterCoupon } from "../utils/priceUtils.js";
+import PriceChat from "../components/PriceChat.jsx";
 import {
   LineChart,
   Line,
@@ -544,6 +545,11 @@ export default function ProductDetails() {
               </div>
             )}
           </div>
+
+          <PriceChat
+            productUrl={product.url}
+            productTitle={product.title}
+          />
 
           {/* Price History Table */}
           {product.history && product.history.length > 0 && (

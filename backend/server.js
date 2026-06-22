@@ -6,6 +6,10 @@ import { connectDB } from "./db/mongodb.js";
 import { scrapeProduct } from "./scraper.js";
 import { handleTelegramUpdate, getBotInfo, getActiveUsers, isUserConnected } from "./telegramBot.js";
 import { validateProductUrl, getSupportedSites } from "./utils/urlValidator.js";
+import { chatAboutPriceTrend } from "./geminiChat.js";
+import { GoogleGenAI } from "@google/genai";
+
+
 
 const app = express();
 app.use(cors());
@@ -145,6 +149,25 @@ app.post("/api/scrape", async (req, res) => {
     }
 });
 
+// AI chat — price trend analysis via Google Gemini
+app.post("/api/chat", async (req, res) => {
+    const { message, productUrl } = req.body;
+
+    try {
+        const result = await chatAboutPriceTrend({ message, productUrl });
+        res.json(result);
+    } catch (err) {
+        console.error("Chat error:", err.message);
+        const msg = err.message || "Something went wrong";
+        const status = msg.includes("not set") ? 503
+            : msg.includes("busy right now") || msg.includes("Too many requests") ? 503
+            : msg.includes("not found") ? 404
+            : msg.includes("required") ? 400
+            : 500;
+        res.status(status).json({ error: msg });
+    }
+});
+
 // get supported sites
 app.get("/api/supported-sites", (req, res) => {
     res.json({
@@ -242,3 +265,43 @@ app.listen(3001, () => {
     console.log("API running on port 3001");
     console.log("Price scraper scheduler is running (checks every 10 minutes)");
 });
+
+
+//testing ai
+// 
+//     try {
+//         const apiKey = process.env.GEMINI_API_KEY;
+//         const ai = new GoogleGenAI(apiKey);
+//         const { prompt } = req.body;
+
+//         if (!prompt) {
+//             return res.status(400).json({
+//                 success: false,
+//                 error: "Missing 'prompt'"
+//             });
+//         }
+        
+//         console.log(`Sending prompt to Gemini: "${prompt}"`);
+
+//         // 3. Simple, unified method call using the current model
+//         const response = await ai.models.generateContent({
+//             model: 'gemini-2.5-flash',
+//             contents: prompt,
+//         });
+
+//         // 4. Return the text directly (.text is a simple property now, not a function)
+//         return res.status(200).json({
+//             success: true,
+//             text: response.text 
+//         });
+
+//     } catch (error) {
+//         console.error("Gemini API Error:", error);
+            
+//         return res.status(500).json({
+//             success: false,
+//             error: "Failed to generate content from Gemini API.",
+//             details: error.message
+//         });
+//     }
+// });
