@@ -267,41 +267,4 @@ app.listen(3001, () => {
 });
 
 
-//testing ai
-// 
-//     try {
-//         const apiKey = process.env.GEMINI_API_KEY;
-//         const ai = new GoogleGenAI(apiKey);
-//         const { prompt } = req.body;
-
-//         if (!prompt) {
-//             return res.status(400).json({
-//                 success: false,
-//                 error: "Missing 'prompt'"
-//             });
-//         }
-        
-//         console.log(`Sending prompt to Gemini: "${prompt}"`);
-
-//         // 3. Simple, unified method call using the current model
-//         const response = await ai.models.generateContent({
-//             model: 'gemini-2.5-flash',
-//             contents: prompt,
-//         });
-
-//         // 4. Return the text directly (.text is a simple property now, not a function)
-//         return res.status(200).json({
-//             success: true,
-//             text: response.text 
-//         });
-
-//     } catch (error) {
-//         console.error("Gemini API Error:", error);
-            
-//         return res.status(500).json({
-//             success: false,
-//             error: "Failed to generate content from Gemini API.",
-//             details: error.message
-//         });
-//     }
-// });
+app.get("/api/health", (req, res) => res.send("Awake!"));
