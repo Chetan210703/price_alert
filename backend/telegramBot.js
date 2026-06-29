@@ -12,28 +12,64 @@ dotenv.config({ path: backendEnv, override: false });
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 
-// Send message to a specific chat ID
+let pollingActive = false;
+let lastUpdateId = 0;
+
+function escapeMarkdown(text) {
+    return String(text).replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
+}
+
+async function telegramRequest(method, payload = {}) {
+    if (!BOT_TOKEN) {
+        throw new Error("BOT_TOKEN not set");
+    }
+    const response = await axios.post(
+        `https://api.telegram.org/bot${BOT_TOKEN}/${method}`,
+        payload,
+        { timeout: 35000 }
+    );
+    if (!response.data?.ok) {
+        throw new Error(response.data?.description || `Telegram ${method} failed`);
+    }
+    return response.data;
+}
+
+// Send message to a specific chat ID (retries without formatting if Markdown fails)
 export async function sendTelegramMessage(chatId, text, parseMode = "Markdown") {
     if (!BOT_TOKEN) {
         console.error("BOT_TOKEN not set");
         return false;
     }
 
+    const payload = { chat_id: chatId, text };
+    if (parseMode) {
+        payload.parse_mode = parseMode;
+    }
+
     try {
-        const sendUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
-        await axios.post(sendUrl, {
-            chat_id: chatId,
-            text,
-            parse_mode: parseMode
-        });
+        await telegramRequest("sendMessage", payload);
         return true;
     } catch (err) {
+        const description = err?.response?.data?.description || err.message;
+        if (parseMode && /parse entities|can't parse/i.test(description)) {
+            try {
+                await telegramRequest("sendMessage", { chat_id: chatId, text });
+                return true;
+            } catch (retryErr) {
+                console.error(`Failed to send message to ${chatId}:`, retryErr?.response?.data || retryErr.message);
+                return false;
+            }
+        }
         console.error(`Failed to send message to ${chatId}:`, err?.response?.data || err.message);
         return false;
     }
 }
 
-// Handle incoming webhook update from Telegram
+export function buildTelegramConnectLink(username, payload = "connect") {
+    const clean = String(username || "").replace(/^@/, "");
+    return `https://t.me/${clean}?start=${encodeURIComponent(payload)}`;
+}
+
 export async function handleTelegramUpdate(update) {
     if (!update.message) return;
 
@@ -42,49 +78,39 @@ export async function handleTelegramUpdate(update) {
     const text = message.text || "";
     const username = message.chat.username || message.chat.first_name || "User";
 
-    // Handle /start or /connect command
     if (text.startsWith("/start") || text.startsWith("/connect")) {
-        // Check if user already exists
         const existingUser = await getUserByChatId(chatId);
-        
+
         if (existingUser && existingUser.active) {
-            // User already connected
             await sendTelegramMessage(
                 chatId,
-                `✅ *You're already connected!*\n\nYou will receive price alerts for all tracked products.\n\nTo disconnect, send /disconnect`,
-                "Markdown"
+                `✅ *You're already connected\\!*\n\nYou will receive price alerts for all tracked products\\.\n\nTo disconnect, send /disconnect`
             );
         } else if (existingUser && !existingUser.active) {
-            // User exists but is inactive, reactivate
             await updateUser(chatId, { active: true, connectedAt: new Date().toISOString() });
             await sendTelegramMessage(
                 chatId,
-                `🎉 *Reconnected!*\n\nYou will now receive price alerts and coupon notifications for all tracked products.\n\nTo disconnect, send /disconnect`,
-                "Markdown"
+                `🎉 *Reconnected\\!*\n\nYou will now receive price alerts and coupon notifications for all tracked products\\.\n\nTo disconnect, send /disconnect`
             );
             console.log(`✓ User reconnected: ${username} (${chatId})`);
         } else {
-            // Add new user
             await addUser({
-                chatId: chatId,
-                username: username,
+                chatId,
+                username,
                 connectedAt: new Date().toISOString(),
                 active: true
             });
 
             await sendTelegramMessage(
                 chatId,
-                `🎉 *Successfully Connected!*\n\nYou will now receive price alerts and coupon notifications for all tracked products.\n\nTo disconnect, send /disconnect`,
-                "Markdown"
+                `🎉 *Successfully Connected\\!*\n\nYou will now receive price alerts and coupon notifications for all tracked products\\.\n\nTo disconnect, send /disconnect`
             );
-            
+
             console.log(`✓ New user connected: ${username} (${chatId})`);
         }
-    }
-    // Handle /disconnect command
-    else if (text.startsWith("/disconnect")) {
+    } else if (text.startsWith("/disconnect")) {
         const user = await getUserByChatId(chatId);
-        
+
         if (user && user.active) {
             await updateUser(chatId, {
                 active: false,
@@ -93,55 +119,167 @@ export async function handleTelegramUpdate(update) {
 
             await sendTelegramMessage(
                 chatId,
-                `👋 *Disconnected*\n\nYou will no longer receive price alerts.\n\nTo reconnect, send /start`,
-                "Markdown"
+                `👋 *Disconnected*\n\nYou will no longer receive price alerts\\.\n\nTo reconnect, send /start`
             );
-            
+
             console.log(`User disconnected: ${username} (${chatId})`);
         } else {
-            await sendTelegramMessage(
-                chatId,
-                `You're not currently connected. Send /start to connect.`,
-                "Markdown"
-            );
+            await sendTelegramMessage(chatId, "You're not currently connected. Send /start to connect.");
         }
-    }
-    // Handle /status command
-    else if (text.startsWith("/status")) {
+    } else if (text.startsWith("/status")) {
         const user = await getUserByChatId(chatId);
-        
+
         if (user && user.active) {
             await sendTelegramMessage(
                 chatId,
-                `✅ *Status: Connected*\n\nYou're receiving price alerts for all tracked products.`,
-                "Markdown"
+                `✅ *Status: Connected*\n\nYou're receiving price alerts for all tracked products\\.`
             );
         } else {
             await sendTelegramMessage(
                 chatId,
-                `❌ *Status: Not Connected*\n\nSend /start to connect and receive alerts.`,
-                "Markdown"
+                `❌ *Status: Not Connected*\n\nSend /start to connect and receive alerts\\.`
             );
         }
-    }
-    // Handle unknown commands
-    else if (text.startsWith("/")) {
+    } else if (text.startsWith("/")) {
         await sendTelegramMessage(
             chatId,
-            `🤖 *Price Alert Bot*\n\nAvailable commands:\n/start - Connect to receive alerts\n/status - Check connection status\n/disconnect - Stop receiving alerts`,
-            "Markdown"
+            `🤖 *Price Alert Bot*\n\nAvailable commands:\n/start \\- Connect to receive alerts\n/status \\- Check connection status\n/disconnect \\- Stop receiving alerts`
         );
     }
 }
 
-// Get bot username/info
+async function bootstrapChatIdFromEnv() {
+    const chatIdRaw = process.env.CHAT_ID;
+    if (!chatIdRaw) return;
+
+    const chatId = parseInt(chatIdRaw, 10);
+    if (Number.isNaN(chatId)) {
+        console.warn("CHAT_ID in .env is not a valid number — ignoring");
+        return;
+    }
+
+    const existing = await getUserByChatId(chatId);
+    if (!existing) {
+        await addUser({
+            chatId,
+            username: "env_user",
+            connectedAt: new Date().toISOString(),
+            active: true
+        });
+        console.log(`✓ Registered CHAT_ID ${chatId} from .env for price alerts`);
+    } else if (!existing.active) {
+        await updateUser(chatId, { active: true, connectedAt: new Date().toISOString() });
+        console.log(`✓ Reactivated CHAT_ID ${chatId} from .env`);
+    }
+}
+
+export async function getWebhookInfo() {
+    if (!BOT_TOKEN) return null;
+    try {
+        const response = await axios.get(
+            `https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo`,
+            { timeout: 15000 }
+        );
+        return response.data?.result || null;
+    } catch (err) {
+        console.error("Failed to get webhook info:", err.message);
+        return null;
+    }
+}
+
+export async function setTelegramWebhook(webhookUrl) {
+    if (!BOT_TOKEN) {
+        throw new Error("BOT_TOKEN not configured");
+    }
+    if (!webhookUrl?.startsWith("https://")) {
+        throw new Error("Webhook URL must use HTTPS");
+    }
+
+    pollingActive = false;
+    const data = await telegramRequest("setWebhook", { url: webhookUrl });
+    console.log(`✓ Telegram webhook set: ${webhookUrl}`);
+    return data;
+}
+
+export function startTelegramPolling() {
+    if (pollingActive || !BOT_TOKEN) return;
+    pollingActive = true;
+    console.log("✓ Telegram long-polling started (for local dev)");
+
+    const poll = async () => {
+        while (pollingActive) {
+            try {
+                const response = await axios.get(
+                    `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates`,
+                    {
+                        params: { offset: lastUpdateId + 1, timeout: 30 },
+                        timeout: 35000
+                    }
+                );
+
+                for (const update of response.data?.result || []) {
+                    lastUpdateId = update.update_id;
+                    await handleTelegramUpdate(update);
+                }
+            } catch (err) {
+                if (!pollingActive) break;
+                console.error("Telegram polling error:", err.message);
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+            }
+        }
+    };
+
+    poll();
+}
+
+export async function setupTelegram() {
+    if (!BOT_TOKEN) {
+        console.warn("⚠ BOT_TOKEN not set — Telegram bot disabled");
+        return { mode: "disabled" };
+    }
+
+    await bootstrapChatIdFromEnv();
+
+    const usePolling = process.env.TELEGRAM_USE_POLLING === "true";
+    const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL?.trim();
+
+    if (usePolling) {
+        try {
+            await telegramRequest("deleteWebhook");
+        } catch (err) {
+            console.warn("Could not delete webhook before polling:", err.message);
+        }
+        startTelegramPolling();
+        return { mode: "polling" };
+    }
+
+    if (webhookUrl) {
+        await setTelegramWebhook(webhookUrl);
+        return { mode: "webhook", url: webhookUrl };
+    }
+
+    const info = await getWebhookInfo();
+    if (info?.url) {
+        console.log(`✓ Telegram webhook active: ${info.url}`);
+        return { mode: "webhook", url: info.url };
+    }
+
+    console.warn("⚠ Telegram bot will NOT receive /start until a webhook is configured.");
+    console.warn("  Set TELEGRAM_WEBHOOK_URL=https://your-backend.com/api/telegram-webhook");
+    console.warn("  Or set TELEGRAM_USE_POLLING=true for local development");
+    return { mode: "none" };
+}
+
 export async function getBotInfo() {
     if (!BOT_TOKEN) {
         return null;
     }
 
     try {
-        const response = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getMe`);
+        const response = await axios.get(
+            `https://api.telegram.org/bot${BOT_TOKEN}/getMe`,
+            { timeout: 15000 }
+        );
         return response.data.result;
     } catch (err) {
         if (err.code === "ECONNREFUSED" || err.code === "ENOTFOUND") {
@@ -153,12 +291,9 @@ export async function getBotInfo() {
     }
 }
 
-// Check if a chat ID is connected
 export async function isUserConnected(chatId) {
     const user = await getUserByChatId(chatId);
     return !!(user && user.active);
 }
 
-// Get all active users (already exported from database.js, but keeping for backward compatibility)
-export { getActiveUsers };
-
+export { getActiveUsers, escapeMarkdown };

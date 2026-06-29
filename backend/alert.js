@@ -1,6 +1,6 @@
 // ✅ New setup inside alert.js
-import { sendTelegramMessage } from "./telegramBot.js";
-import { getActiveUsers } from "./db/database.js";     
+import { sendTelegramMessage, escapeMarkdown } from "./telegramBot.js";
+import { getActiveUsers } from "./db/database.js";
 
 export async function sendAlert(message) {
     const activeUsers =await getActiveUsers();
@@ -36,12 +36,12 @@ export async function sendAlert(message) {
                 : null;
 
         text = [
-            `*Price Alert for ${siteLabel}*`,
-            site ? `Site: ${site}` : null,
-            oldPrice !== undefined ? `Old Price: ${oldPrice}` : null,
-            newPrice !== undefined ? `New Price: ${newPrice}` : null,
-            couponLine,
-            url ? `URL: ${url}` : null
+            `*Price Alert for ${escapeMarkdown(siteLabel)}*`,
+            site ? `Site: ${escapeMarkdown(site)}` : null,
+            oldPrice !== undefined ? `Old Price: ${escapeMarkdown(oldPrice)}` : null,
+            newPrice !== undefined ? `New Price: ${escapeMarkdown(newPrice)}` : null,
+            couponLine ? escapeMarkdown(couponLine) : null,
+            url ? `URL: ${escapeMarkdown(url)}` : null
         ].filter(Boolean).join("\n");
     } else {
         text = String(message);

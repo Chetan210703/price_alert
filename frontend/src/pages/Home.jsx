@@ -206,9 +206,10 @@ export default function Home() {
             </Link>
             {botInfo && botInfo.connected && (
               <a
-                href={botInfo.botLink}
+                href={botInfo.connectLink || botInfo.botLink}
                 target="_blank"
                 rel="noopener noreferrer"
+                title="Opens Telegram with /start ready — tap Send to connect"
                 style={{
                   background: "linear-gradient(135deg, #0088cc 0%, #0066aa 100%)",
                   color: "#ffffff",
@@ -270,14 +271,15 @@ export default function Home() {
                 }}>
                   {botInfo.activeUsersCount > 0 
                     ? `${botInfo.activeUsersCount} user(s) connected`
-                    : "Click the button above to connect and receive instant alerts"}
+                    : "Click Connect — Telegram opens with /start ready. Tap Send once to receive alerts."}
                 </p>
               </div>
             </div>
             <a
-              href={botInfo.botLink}
+              href={botInfo.connectLink || botInfo.botLink}
               target="_blank"
               rel="noopener noreferrer"
+              title="Opens Telegram with /start ready — tap Send to connect"
               style={{
                 background: "linear-gradient(135deg, #0088cc 0%, #0066aa 100%)",
                 color: "#ffffff",
@@ -291,6 +293,20 @@ export default function Home() {
             >
               Open Bot →
             </a>
+          </div>
+        )}
+
+        {!telegramLoading && botInfo && !botInfo.connected && (
+          <div style={{
+            background: "rgba(255, 255, 255, 0.95)",
+            borderRadius: "12px",
+            padding: "16px 20px",
+            marginBottom: "24px",
+            border: "2px solid #ffc107",
+          }}>
+            <p style={{ margin: 0, color: "#856404", fontWeight: "600" }}>
+              Telegram bot unavailable — check BOT_TOKEN on your backend (Render).
+            </p>
           </div>
         )}
 

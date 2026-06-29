@@ -4,7 +4,7 @@ import axios from "axios";
 import { getAllProducts, getProductByUrl, addProduct, updateProduct, addProductHistory, deleteProduct } from "./db/database.js";
 import { connectDB } from "./db/mongodb.js";
 import { scrapeProduct } from "./scraper.js";
-import { handleTelegramUpdate, getBotInfo, getActiveUsers, isUserConnected } from "./telegramBot.js";
+import { handleTelegramUpdate, getBotInfo, getActiveUsers, isUserConnected, setupTelegram, getWebhookInfo, setTelegramWebhook, buildTelegramConnectLink } from "./telegramBot.js";
 import { validateProductUrl, getSupportedSites } from "./utils/urlValidator.js";
 import { chatAboutPriceTrend } from "./geminiChat.js";
 import { GoogleGenAI } from "@google/genai";
@@ -12,6 +12,7 @@ import { GoogleGenAI } from "@google/genai";
 
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json());
 
@@ -191,22 +192,40 @@ app.post("/api/telegram-webhook", async (req, res) => {
 app.get("/api/telegram-bot-info", async (req, res) => {
     try {
         const botInfo = await getBotInfo();
+        const webhookInfo = await getWebhookInfo();
         if (!botInfo) {
-            return res.status(500).json({ error: "Bot token not configured" });
+            return res.status(503).json({
+                error: "Telegram bot unavailable. Check BOT_TOKEN and network access to api.telegram.org.",
+                connected: false
+            });
         }
 
         const botUsername = botInfo.username;
         const botLink = `https://t.me/${botUsername}`;
+        const connectLink = buildTelegramConnectLink(botUsername);
         const activeUsers = await getActiveUsers();
 
         res.json({
             botUsername,
             botLink,
+            connectLink,
             activeUsersCount: activeUsers.length,
-            connected: true
+            connected: true,
+            webhookUrl: webhookInfo?.url || null,
+            webhookPendingUpdates: webhookInfo?.pending_update_count ?? null
         });
     } catch (err) {
         res.status(500).json({ error: err.message, connected: false });
+    }
+});
+
+// Debug webhook status
+app.get("/api/telegram-webhook-info", async (req, res) => {
+    try {
+        const webhookInfo = await getWebhookInfo();
+        res.json(webhookInfo || { url: "", pending_update_count: 0 });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -229,30 +248,35 @@ app.get("/api/telegram-status", async (req, res) => {
 // Setup webhook endpoint (call this once to configure Telegram webhook)
 app.post("/api/telegram-setup-webhook", async (req, res) => {
     try {
-        const BOT_TOKEN = process.env.BOT_TOKEN;
-        if (!BOT_TOKEN) {
-            return res.status(500).json({ error: "BOT_TOKEN not configured" });
-        }
+        const webhookUrl =
+            req.body.webhookUrl ||
+            process.env.TELEGRAM_WEBHOOK_URL ||
+            `${req.protocol}://${req.get("host")}/api/telegram-webhook`;
 
-        // Get webhook URL from request or use default
-        const webhookUrl = req.body.webhookUrl || `${req.protocol}://${req.get('host')}/api/telegram-webhook`;
-        
-        const response = await axios.post(
-            `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`,
-            { url: webhookUrl }
-        );
+        const telegramResponse = await setTelegramWebhook(webhookUrl);
 
         res.json({
             success: true,
             message: "Webhook configured successfully",
             webhookUrl,
-            telegramResponse: response.data
+            telegramResponse
         });
     } catch (err) {
-        res.status(500).json({ 
+        res.status(500).json({
             error: err.message,
-            details: err?.response?.data 
+            details: err?.response?.data
         });
+    }
+});
+
+// Test alert — sends a message to all connected users
+app.post("/api/telegram-test-alert", async (req, res) => {
+    try {
+        const { sendAlert } = await import("./alert.js");
+        await sendAlert("✅ Test alert from Price Tracker. Telegram notifications are working!");
+        res.json({ message: "Test alert sent to connected users" });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 });
 
@@ -261,9 +285,15 @@ import('./schedular.js').catch(err => {
     console.error('Failed to start scheduler:', err.message);
 });
 
-app.listen(3001, () => {
+app.listen(3001, async () => {
     console.log("API running on port 3001");
     console.log("Price scraper scheduler is running (checks every 10 minutes)");
+    try {
+        const telegram = await setupTelegram();
+        console.log("Telegram mode:", telegram.mode);
+    } catch (err) {
+        console.error("Telegram setup failed:", err.message);
+    }
 });
 
 
