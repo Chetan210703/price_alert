@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { API_BASE } from "../config.js";
+import { appLog, appError } from "../utils/logger.js";
 
 export default function AddProduct() {
   const [url, setUrl] = useState("");
@@ -108,6 +109,7 @@ export default function AddProduct() {
     }
 
     setLoading(true);
+    appLog("add-product", "Submitting URL", { url: url.trim(), site });
 
     try {
       const response = await fetch(`${API_BASE}/api/add-product`, {
@@ -122,8 +124,10 @@ export default function AddProduct() {
       });
 
       const data = await response.json();
+      appLog("add-product", "API response", { ok: response.ok, data });
 
       if (!response.ok) {
+        appError("add-product", "Server rejected request", data.error);
         setError(data.error || "Failed to add product");
         setLoading(false);
         return;
@@ -132,13 +136,13 @@ export default function AddProduct() {
       setSuccess(true);
       setUrl("");
       setSite("");
+      appLog("add-product", "Product saved — scrape running on backend. Redirecting to dashboard...");
 
-      // Redirect to home after 2 seconds
       setTimeout(() => {
         navigate("/");
       }, 2000);
     } catch (err) {
-      console.error("Error adding product:", err);
+      appError("add-product", "Network or parse error", err);
       setError("Network error. Please try again.");
       setLoading(false);
     }

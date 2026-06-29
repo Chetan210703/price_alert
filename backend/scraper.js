@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import { getAllProducts, getProductByUrl, updateProduct, addProductHistory } from './db/database.js';
 import { sendAlert } from './alert.js';
+import { logStep, logError } from './utils/logger.js';
 
 // Helper function to detect site from URL
 function detectSite(url) {
@@ -321,16 +322,27 @@ async function scrapeVijaySales(page, url) {
 
 // Main scraping function
 export async function scrapeProduct(productUrl, site = null) {
-    const browser = await chromium.launch({ headless: true });
+    logStep("scraper", "1/5", "Launching browser", { url: productUrl, site });
+
+    let browser;
+    try {
+        browser = await chromium.launch({
+            headless: true,
+            args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+        });
+    } catch (err) {
+        logError("scraper", "1/5", "Browser launch failed — run: npx playwright install chromium", err);
+        throw new Error(`Browser launch failed: ${err.message}. On Render, ensure postinstall installs Playwright browsers.`);
+    }
+
+    logStep("scraper", "2/5", "Browser launched");
     
-    // Create context with user agent to avoid bot detection
     const context = await browser.newContext({
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     });
     const page = await context.newPage();
     
     try {
-        // Detect site if not provided
         if (!site) {
             site = detectSite(productUrl);
         }
@@ -338,11 +350,12 @@ export async function scrapeProduct(productUrl, site = null) {
         if (!site) {
             throw new Error('Unable to detect site from URL');
         }
-        
-        console.log(`Scraping ${site} product: ${productUrl}`);
+
+        const normalizedSite = site.toLowerCase().replace(/\.(in|com)$/, "");
+        logStep("scraper", "3/5", `Scraping ${normalizedSite}`, productUrl);
         
         let result;
-        switch (site.toLowerCase()) {
+        switch (normalizedSite) {
             case 'amazon':
                 result = await scrapeAmazon(page, productUrl);
                 break;
@@ -353,24 +366,18 @@ export async function scrapeProduct(productUrl, site = null) {
                 result = await scrapeVijaySales(page, productUrl);
                 break;
             default:
-                throw new Error(`Unsupported site: ${site}`);
+                throw new Error(`Unsupported site: ${site} (normalized: ${normalizedSite})`);
         }
         
-        console.log(`Price found: ${result.price}`);
-        if (result.title) {
-            console.log(`Title: ${result.title}`);
-        }
-        if (typeof result.couponAvailable === 'boolean') {
-            if (result.couponAvailable) {
-                console.log(`Coupon available: ${result.couponText || 'Yes'}`);
-            } else {
-                console.log('Coupon available: No');
-            }
-        }
+        logStep("scraper", "4/5", "Extracted data", {
+            price: result.price,
+            title: result.title?.slice(0, 50) || null,
+        });
+        logStep("scraper", "5/5", "Scrape complete");
         
         return result;
     } catch (err) {
-        console.error(`Scraping error for ${productUrl}:`, err.message);
+        logError("scraper", "FAIL", `Scrape failed for ${productUrl}`, err);
         throw err;
     } finally {
         await context.close().catch(() => {});

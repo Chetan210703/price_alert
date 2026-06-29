@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { getPriceAfterCoupon } from "../utils/priceUtils.js";
 import { API_BASE } from "../config.js";
+import { appLog, appWarn } from "../utils/logger.js";
 
 export default function Home() {
   const [products, setProducts] = useState([]);
@@ -12,7 +13,8 @@ export default function Home() {
   const [botInfo, setBotInfo] = useState(null);
   const [telegramLoading, setTelegramLoading] = useState(true);
 
-  const fetchProducts = () => {
+  const fetchProducts = useCallback((source = "manual") => {
+    appLog("home", `Fetching products (${source})`, { api: API_BASE });
     fetch(`${API_BASE}/api/products`)
       .then(res => {
         if (!res.ok) {
@@ -21,21 +23,43 @@ export default function Home() {
         return res.json();
       })
       .then(data => {
-        setProducts(data || []);
+        const list = data || [];
+        appLog("home", `Loaded ${list.length} product(s)`, list.map((p) => ({
+          title: p.title || "(untitled)",
+          scrapeStatus: p.scrapeStatus,
+          price: p.history?.[p.history.length - 1]?.price || "N/A",
+          scrapeError: p.scrapeError || null,
+        })));
+        setProducts(list);
         setLoading(false);
         setError(null);
       })
       .catch(err => {
-        console.error("Error fetching products:", err);
+        appWarn("home", "Failed to fetch products", err.message);
         setError("Cannot connect to the API. Check that the backend is running and VITE_API_BASE is set correctly.");
         setLoading(false);
       });
-  };
+  }, []);
 
   useEffect(() => {
-    fetchProducts();
+    fetchProducts("mount");
     fetchBotInfo();
-  }, []);
+  }, [fetchProducts]);
+
+  // Poll while any product is still being scraped
+  useEffect(() => {
+    const pending = products.some(
+      (p) =>
+        p.scrapeStatus === "pending" ||
+        p.scrapeStatus === "scraping" ||
+        (!p.history?.length && p.scrapeStatus !== "failed")
+    );
+    if (!pending) return;
+
+    appLog("home", "Polling — waiting for scrape to finish...");
+    const interval = setInterval(() => fetchProducts("poll"), 5000);
+    return () => clearInterval(interval);
+  }, [products, fetchProducts]);
 
   const fetchBotInfo = async () => {
     try {
@@ -100,6 +124,23 @@ export default function Home() {
   const getLatestPrice = (history) => {
     if (!history || history.length === 0) return "N/A";
     return history[history.length - 1]?.price || "N/A";
+  };
+
+  const getPriceDisplay = (product) => {
+    const price = getLatestPrice(product.history);
+    if (price !== "N/A") return { text: price, tone: "normal" };
+
+    if (product.scrapeStatus === "failed") {
+      return {
+        text: "Scrape failed",
+        tone: "error",
+        hint: product.scrapeError || "Check Render logs for [PriceAlert][scraper]",
+      };
+    }
+    if (product.scrapeStatus === "scraping" || product.scrapeStatus === "pending") {
+      return { text: "Fetching price...", tone: "loading" };
+    }
+    return { text: "N/A", tone: "muted", hint: "No price yet — try Update Prices" };
   };
 
   const getLatestCouponInfo = (history) => {
@@ -395,6 +436,7 @@ export default function Home() {
           }}>
             {products.map(p => {
               const latestCoupon = getLatestCouponInfo(p.history);
+              const priceInfo = getPriceDisplay(p);
               return (
               <div
                 key={p.url}
@@ -461,13 +503,26 @@ export default function Home() {
                     Current Price
                   </p>
                   <p style={{
-                    color: "#667eea",
-                    fontSize: "1.5rem",
+                    color: priceInfo.tone === "error" ? "#c62828"
+                      : priceInfo.tone === "loading" ? "#f57c00"
+                      : priceInfo.tone === "muted" ? "#999"
+                      : "#667eea",
+                    fontSize: priceInfo.tone === "loading" ? "1.1rem" : "1.5rem",
                     fontWeight: "700",
-                    margin: 0
+                    margin: 0,
+                    fontStyle: priceInfo.tone === "loading" ? "italic" : "normal",
                   }}>
-                    {getLatestPrice(p.history)}
+                    {priceInfo.text}
                   </p>
+                  {priceInfo.hint && (
+                    <p style={{
+                      color: priceInfo.tone === "error" ? "#c62828" : "#999",
+                      fontSize: "0.8rem",
+                      margin: "6px 0 0 0",
+                    }}>
+                      {priceInfo.hint}
+                    </p>
+                  )}
                   {/* Show price after coupon if available */}
                   {latestCoupon.hasCoupon && (() => {
                     const latestEntry = p.history?.[p.history.length - 1];

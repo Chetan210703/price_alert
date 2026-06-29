@@ -3,11 +3,11 @@ import cors from "cors";
 import axios from "axios";
 import { getAllProducts, getProductByUrl, addProduct, updateProduct, addProductHistory, deleteProduct } from "./db/database.js";
 import { connectDB } from "./db/mongodb.js";
-import { scrapeProduct } from "./scraper.js";
 import { handleTelegramUpdate, getBotInfo, getActiveUsers, isUserConnected, setupTelegram, getWebhookInfo, setTelegramWebhook, buildTelegramConnectLink } from "./telegramBot.js";
 import { validateProductUrl, getSupportedSites } from "./utils/urlValidator.js";
 import { chatAboutPriceTrend } from "./geminiChat.js";
-import { GoogleGenAI } from "@google/genai";
+import { runInitialScrape } from "./jobs/initialScrape.js";
+import { logStep, logError, logWarn } from "./utils/logger.js";
 
 
 
@@ -15,6 +15,14 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json());
+
+function resolveSiteName(site, detectedSite) {
+    const raw = String(site || detectedSite || "").toLowerCase();
+    if (raw.includes("amazon")) return "amazon";
+    if (raw.includes("flipkart")) return "flipkart";
+    if (raw.includes("vijay")) return "vijaysales";
+    return detectedSite;
+}
 
 // Initialize MongoDB connection on startup
 connectDB().catch(err => {
@@ -49,68 +57,54 @@ app.get("/api/product", async (req, res) => {
 // add product route
 app.post("/api/add-product", async (req, res) => {
     const { url, site } = req.body;
-    
+
     try {
-        // Validate URL format and supported site
+        logStep("add-product", "1/4", "Request received", { url, site });
+
         const validation = validateProductUrl(url);
         if (!validation.valid) {
+            logWarn("add-product", "FAIL", "URL validation failed", validation.error);
             return res.status(400).json({ error: validation.error });
         }
-        
+
         const normalizedUrl = validation.normalizedUrl;
         const detectedSite = validation.site;
-        
-        // Check if product already exists
+        const finalSite = resolveSiteName(site, detectedSite);
+        logStep("add-product", "2/4", "URL validated", { normalizedUrl, detectedSite, finalSite });
+
         const existingProduct = await getProductByUrl(normalizedUrl);
         if (existingProduct) {
+            logWarn("add-product", "FAIL", "Product already exists", normalizedUrl);
             return res.status(400).json({ error: "Product already exists" });
         }
-        
-        // Use detected site or provided site
-        const finalSite = site || detectedSite;
-        
-        // Create new product
+
         const newProduct = {
             url: normalizedUrl,
             site: finalSite,
             title: "",
-            history: []
+            history: [],
+            scrapeStatus: "pending",
+            scrapeError: null,
+            lastScrapeAt: null,
         };
-        
+
         await addProduct(newProduct);
-        
-        // Trigger immediate scrape for the new product (in background, don't block response)
-        scrapeProduct(normalizedUrl, finalSite).then(async result => {
-            try {
-                const product = await getProductByUrl(normalizedUrl);
-                if (product && result) {
-                    const updates = {};
-                    if (result.title) updates.title = result.title;
-                    
-                    const historyEntry = {
-                        price: result.price,
-                        couponAvailable: typeof result.couponAvailable === 'boolean'
-                            ? result.couponAvailable
-                            : null,
-                        couponText: result.couponText || null,
-                        timestamp: new Date().toISOString()
-                    };
-                    
-                    await updateProduct(normalizedUrl, updates);
-                    await addProductHistory(normalizedUrl, historyEntry);
-                    
-                    console.log(`✓ Initial price scraped for new product: ${normalizedUrl} - ${result.price}`);
-                }
-            } catch (err) {
-                console.error(`Error updating product after scrape: ${err.message}`);
-            }
-        }).catch(err => {
-            console.error(`Failed to scrape initial price for ${normalizedUrl}:`, err.message);
+        logStep("add-product", "3/4", "Saved to MongoDB (scrapeStatus: pending)", { url: normalizedUrl });
+
+        runInitialScrape(normalizedUrl, finalSite).catch((err) => {
+            logError("add-product", "4/4", "Background scrape failed", err);
         });
-        
-        res.json({ message: "Product added successfully. Scraping initial price in background..." });
+
+        logStep("add-product", "4/4", "Background scrape queued — response sent to client");
+
+        res.json({
+            message: "Product added successfully. Scraping initial price in background...",
+            url: normalizedUrl,
+            site: finalSite,
+            scrapeStatus: "pending",
+        });
     } catch (err) {
-        console.error("Error adding product:", err);
+        logError("add-product", "FAIL", "Unexpected error", err);
         res.status(500).json({ error: "Failed to add product" });
     }
 });
